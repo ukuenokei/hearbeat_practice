@@ -8,8 +8,7 @@
 #define PORT 8000
 #define ECHOSTRING "ImAlive"
 #define BUFSIZE 16
-
-
+#define LOOP_MAX 1000000
 int main()
 {
     int sock;
@@ -17,37 +16,51 @@ int main()
     struct sockaddr_in client_addr;
     int client_addr_len;
 
-    char message[BUFSIZE]=ECHOSTRING;
+    char message[BUFSIZE] = ECHOSTRING;
     char buffer[BUFSIZE];
 
-
+    if (&serv_addr == NULL)
+    {
+        perror("serv_addr is NULL");
+        exit(EXIT_FAILURE);
+    }
     memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family=PF_INET;
-    serv_addr.sin_addr.s_addr=htonl(INADDR_ANY);
-    serv_addr.sin_port=htons(PORT);
+    serv_addr.sin_family = PF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(PORT);
 
-    if((sock=socket(PF_INET,SOCK_DGRAM,IPPROTO_UDP))<0){
+    if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
+    {
         perror("socket() failed");
         exit(EXIT_FAILURE);
     }
 
-    if(bind(sock,(struct sockaddr*)&serv_addr,sizeof(serv_addr))){
+    if (bind(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)))
+    {
         perror("bind() failed");
         exit(EXIT_FAILURE);
     }
-    client_addr_len=sizeof(client_addr);
-    if(recvfrom(sock, buffer, sizeof(buffer), 0,
-                (struct sockaddr *) &client_addr, &client_addr_len)<0){
-        perror("recvfrom() failed");
+    for (int i = 0; i < LOOP_MAX; i++)
+    {
+        client_addr_len = sizeof(client_addr);
+        if (recvfrom(sock, buffer, sizeof(buffer), 0,
+                     (struct sockaddr *)&client_addr, &client_addr_len) < 0)
+        {
+            perror("recvfrom() failed");
+            exit(EXIT_FAILURE);
+        }
+        if (sendto(sock, message, sizeof(message), 0,
+                   (struct sockaddr *)&client_addr, client_addr_len) < 0)
+        {
+            perror("sendto() failed");
+            exit(EXIT_FAILURE);
+        }
+    }
+    if (close(sock) < 0)
+    {
+        perror("close() failed");
         exit(EXIT_FAILURE);
     }
-        printf("%d\n",client_addr_len);
-    
-    if(sendto(sock, message, sizeof(message),0,
-        (struct sockaddr*)&client_addr,client_addr_len)!=sizeof(message)){
-        perror("sendto() failed");
-        exit(EXIT_FAILURE);
-    }
-    close(sock);
+
     return 0;
 }
