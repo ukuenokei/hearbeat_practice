@@ -8,7 +8,7 @@
 #define PORT 8000
 #define ECHOSTRING "ImAlive"
 #define BUFSIZE 16
-#define LOOP_MAX 1000000
+#define MONITOR_MAX 1000000
 int main()
 {
     int sock;
@@ -40,7 +40,7 @@ int main()
         perror("bind() failed");
         exit(EXIT_FAILURE);
     }
-    for (int i = 0; i < LOOP_MAX; i++)
+    for (int i = 0; i < MONITOR_MAX; i++)
     {
         client_addr_len = sizeof(client_addr);
         if (recvfrom(sock, buffer, sizeof(buffer), 0,
@@ -48,6 +48,9 @@ int main()
         {
             perror("recvfrom() failed");
             exit(EXIT_FAILURE);
+        }
+        else{
+            printf("Hndling client : %s\n",inet_ntoa(client_addr.sin_addr));
         }
         if (sendto(sock, message, sizeof(message), 0,
                    (struct sockaddr *)&client_addr, client_addr_len) < 0)
