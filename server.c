@@ -65,7 +65,7 @@ int main() {
         /*********************************受信イベント*********************************/
         client_addr_len = sizeof(client_addr);
         if (recvfrom(sock, &buffer, sizeof(buffer), 0,
-                     (struct sockaddr *)&client_addr, &client_addr_len) < 0) {
+                (struct sockaddr *)&client_addr, &client_addr_len) < 0) {
             /*recvfromが失敗したとき*/
             if (errno == EWOULDBLOCK) {
                 /*タイムアウト時のみ継続*/
@@ -85,7 +85,6 @@ int main() {
                 exit(EXIT_FAILURE);
             }
         }
-        /*TODO:タイムアウト処理を入れる*/
         // printf("Hndling client : %s\n", inet_ntoa(client_addr.sin_addr));
         timestamp = ((timestamp < buffer) ? buffer : timestamp) + 1;
         printf("[%d]\tServer recv\n", timestamp);
@@ -93,7 +92,7 @@ int main() {
         /*********************************送信イベント*********************************/
         timestamp++; /*送信イベント*/
         if (sendto(sock, &timestamp, sizeof(timestamp), 0,
-                   (struct sockaddr *)&client_addr, client_addr_len) < 0) {
+                (struct sockaddr *)&client_addr, client_addr_len) < 0) {
             perror("sendto() failed");
         }
         /*****************************************************************************/

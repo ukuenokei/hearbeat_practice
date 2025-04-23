@@ -68,14 +68,14 @@ int main() {
         timestamp++; /*送信イベント*/
         printf("[%d]\tClient send\n", timestamp);
         if (sendto(sock, &timestamp, sizeof(timestamp), 0,
-                   (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+                (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
             perror("sendto() failed");
         }
         /*****************************************************************************/
         /*********************************受信イベント*********************************/
         serv_addr_len = sizeof(serv_addr);
         if (recvfrom(sock, &buffer, sizeof(buffer), 0,
-                     (struct sockaddr *)&serv_addr, &serv_addr_len) < 0) {
+                (struct sockaddr *)&serv_addr, &serv_addr_len) < 0) {
             /*recvfromが失敗したとき*/
             if (errno == EWOULDBLOCK) {
                 /*タイムアウト時のみ継続*/
