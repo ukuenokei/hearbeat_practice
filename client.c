@@ -11,7 +11,8 @@
 #define PORT 8000
 #define ECHOSTRING "ImAlive"
 #define BUFSIZE 16
-#define TIMEOUT 1
+#define TIMEOUT_SEC 5
+#define TIMEOUT_USEC 0
 #define INTERVAL 3
 #define RETRY_MAX 3
 
@@ -27,15 +28,16 @@ int main() {
     int sock;
     struct sockaddr_in serv_addr;
     int serv_addr_len;
-    char message[BUFSIZE] = ECHOSTRING;
-    char buffer[BUFSIZE];
+    unsigned int timestamp; /*自分の時刻*/
+    unsigned int buffer;    /*相手から受け取った時刻*/
     struct timeval timeout;
     struct nodemap nm;
 
     // timeout.tv_sec = 0;
     // timeout.tv_usec = 100 * 1000; /*100msec*/
-    timeout.tv_sec = TIMEOUT;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = TIMEOUT_SEC;
+    timeout.tv_usec = TIMEOUT_USEC;
+    timestamp = 0;
     nm.self = ALIVE;
     nm.peer = ALIVE;
 
@@ -62,18 +64,22 @@ int main() {
 
     int i = 0;
     while (1) {
-        if (sendto(sock, message, sizeof(message), 0,
+        /*********************************送信イベント*********************************/
+        timestamp++; /*送信イベント*/
+        printf("[%d]\tClient send\n", timestamp);
+        if (sendto(sock, &timestamp, sizeof(timestamp), 0,
                    (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
             perror("sendto() failed");
         }
-        /**********************************サーバーからの確認処理***********************************/
+        /*****************************************************************************/
+        /*********************************受信イベント*********************************/
         serv_addr_len = sizeof(serv_addr);
-        if (recvfrom(sock, buffer, BUFSIZE, 0, (struct sockaddr *)&serv_addr,
-                     &serv_addr_len) < 0) {
+        if (recvfrom(sock, &buffer, sizeof(buffer), 0,
+                     (struct sockaddr *)&serv_addr, &serv_addr_len) < 0) {
             /*recvfromが失敗したとき*/
             if (errno == EWOULDBLOCK) {
                 /*タイムアウト時のみ継続*/
-                printf("recvfrom() timeout\n");
+                printf("recvfrom() timeout retry %d\n", i);
                 i++; /*タイムアウトカウント*/
                 if (i == RETRY_MAX) {
                     nm.peer = DEAD;
@@ -89,17 +95,19 @@ int main() {
                 exit(EXIT_FAILURE);
             }
         }
-        if (strcmp(buffer, message) != 0) {
-            /*期待したメッセージを受信しなかった場合*/
-            printf("Message Error : %s\n",buffer);
-            break;
-        }
+        // if (strcmp(buffer, message) != 0) {
+        //     /*期待したメッセージを受信しなかった場合*/
+        //     printf("Message Error : %s\n", buffer);
+        //     break;
+        // }
         /*期待したメッセージを受信したらここに来る
-        recvfrom()> 0 -> strcmp()==0*/
-        printf("Peer server is alive\n");
-        nm.peer = ALIVE;
+        recvfrom()> 0*/
+        timestamp =
+            ((timestamp < buffer) ? buffer : timestamp) + 1; /*受信イベント*/
+        printf("[%d]\tClient recv\n", timestamp);
+        /*****************************************************************************/
+        // nm.peer = ALIVE;
         sleep(INTERVAL);
-        /*****************************************************************************************/
     }
     return 0;
 }
