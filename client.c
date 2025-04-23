@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -15,6 +16,7 @@
 #define TIMEOUT_USEC 0
 #define INTERVAL 3
 #define RETRY_MAX 3
+#define NFDS 1
 
 #define ALIVE 0
 #define DEAD 1
@@ -32,11 +34,7 @@ int main() {
     unsigned int buffer;    /*相手から受け取った時刻*/
     struct timeval timeout;
     struct nodemap nm;
-
-    // timeout.tv_sec = 0;
-    // timeout.tv_usec = 100 * 1000; /*100msec*/
-    timeout.tv_sec = TIMEOUT_SEC;
-    timeout.tv_usec = TIMEOUT_USEC;
+    fd_set sock_set;
     timestamp = 0;
     nm.self = ALIVE;
     nm.peer = ALIVE;
@@ -56,14 +54,19 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) <
-        0) {
-        perror("setsockopt(RCVTIMEO) failed");
-        exit(EXIT_FAILURE);
-    }
+    // if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout))
+    // <
+    //     0) {
+    //     perror("setsockopt(RCVTIMEO) failed");
+    //     exit(EXIT_FAILURE);
+    // }
 
     int i = 0;
     while (1) {
+        FD_ZERO(&sock_set);
+        FD_SET(sock, &sock_set);
+        timeout.tv_sec = TIMEOUT_SEC;
+        timeout.tv_usec = TIMEOUT_USEC;
         /*********************************送信イベント*********************************/
         timestamp++; /*送信イベント*/
         printf("[%d]\tClient send\n", timestamp);
@@ -73,40 +76,67 @@ int main() {
         }
         /*****************************************************************************/
         /*********************************受信イベント*********************************/
-        serv_addr_len = sizeof(serv_addr);
-        if (recvfrom(sock, &buffer, sizeof(buffer), 0,
-                     (struct sockaddr *)&serv_addr, &serv_addr_len) < 0) {
-            /*recvfromが失敗したとき*/
-            if (errno == EWOULDBLOCK) {
-                /*タイムアウト時のみ継続*/
-                printf("recvfrom() timeout retry %d\n", i);
-                i++; /*タイムアウトカウント*/
-                if (i == RETRY_MAX) {
-                    nm.peer = DEAD;
+        int ret = select(NFDS, &sock_set, NULL, NULL, &timeout);
+        if (ret == 0) {
+            /*タイムアウト*/
+            printf("recvfrom() timeout retry %d\n", i);
+            i++; /*タイムアウトカウント*/
+            if (i == RETRY_MAX) {
+                nm.peer = DEAD;
+            }
+            if (nm.peer == DEAD) {
+                printf("Peer server is dead\n");
+                break;
+            }
+            continue;
+        } else if (ret < 0) {
+            /*タイムアウト以外の異常は終了*/
+            perror("recvfrom() failed");
+            exit(EXIT_FAILURE);
+        } else {
+            if (FD_ISSET(sock, &sock_set)) {
+                serv_addr_len = sizeof(serv_addr);
+                if (recvfrom(sock, &buffer, sizeof(buffer), 0,
+                             (struct sockaddr *)&serv_addr,
+                             &serv_addr_len) < 0) {
+                    perror("recvfrom() failed");
                 }
-                if (nm.peer == DEAD) {
-                    printf("Peer server is dead\n");
-                    break;
-                }
-                continue;
+                timestamp = ((timestamp < buffer) ? buffer : timestamp) +
+                            1; /*受信イベント*/
+                printf("[%d]\tClient recv\n", timestamp);
             } else {
-                /*それ以外は終了*/
-                perror("recvfrom() failed");
-                exit(EXIT_FAILURE);
+                perror("FD_ISSET() failed");
             }
         }
+        // serv_addr_len = sizeof(serv_addr);
+        // if (recvfrom(sock, &buffer, sizeof(buffer), 0,
+        //              (struct sockaddr *)&serv_addr, &serv_addr_len) < 0) {
+        //     /*recvfromが失敗したとき*/
+        //     if (errno == EWOULDBLOCK) {
+        //         /*タイムアウト時のみ継続*/
+        //         printf("recvfrom() timeout retry %d\n", i);
+        //         i++; /*タイムアウトカウント*/
+        //         if (i == RETRY_MAX) {
+        //             nm.peer = DEAD;
+        //         }
+        //         if (nm.peer == DEAD) {
+        //             printf("Peer server is dead\n");
+        //             break;
+        //         }
+        //         continue;
+        //     } else {
+        //         /*それ以外は終了*/
+        //         perror("recvfrom() failed");
+        //         exit(EXIT_FAILURE);
+        //     }
+        //}
         // if (strcmp(buffer, message) != 0) {
         //     /*期待したメッセージを受信しなかった場合*/
         //     printf("Message Error : %s\n", buffer);
         //     break;
         // }
-        /*期待したメッセージを受信したらここに来る
-        recvfrom()> 0*/
-        timestamp =
-            ((timestamp < buffer) ? buffer : timestamp) + 1; /*受信イベント*/
-        printf("[%d]\tClient recv\n", timestamp);
+
         /*****************************************************************************/
-        // nm.peer = ALIVE;
         sleep(INTERVAL);
     }
     return 0;

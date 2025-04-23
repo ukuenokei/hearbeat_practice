@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -14,6 +15,7 @@
 #define TIMEOUT_USEC 0
 #define INTERVAL 3
 #define RETRY_MAX 3
+#define NFDS 1
 
 #define ALIVE 0
 #define DEAD 1
@@ -26,14 +28,13 @@ int main() {
     int sock;
     struct sockaddr_in serv_addr;
     struct sockaddr_in client_addr;
+    fd_set sock_set;
     int client_addr_len;
     unsigned int timestamp; /*自分の時刻*/
     unsigned int buffer;    /*相手から受け取った時刻*/
     struct timeval timeout;
     struct nodemap nm;
 
-    timeout.tv_sec = TIMEOUT_SEC;
-    timeout.tv_usec = TIMEOUT_USEC;
     timestamp = 0;
 
     if (&serv_addr == NULL) {
@@ -49,11 +50,12 @@ int main() {
         perror("socket() failed");
         exit(EXIT_FAILURE);
     }
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) <
-        0) {
-        perror("setsockopt(RCVTIMEO) failed");
-        exit(EXIT_FAILURE);
-    }
+    // if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout))
+    // <
+    //     0) {
+    //     perror("setsockopt(RCVTIMEO) failed");
+    //     exit(EXIT_FAILURE);
+    // }
 
     if (bind(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) {
         perror("bind() failed");
@@ -62,31 +64,47 @@ int main() {
 
     int i = 0;
     while (1) {
+        FD_ZERO(&sock_set);
+        FD_SET(sock, &sock_set);
+        timeout.tv_sec = TIMEOUT_SEC;
+        timeout.tv_usec = TIMEOUT_USEC;
         /*********************************受信イベント*********************************/
         client_addr_len = sizeof(client_addr);
-        if (recvfrom(sock, &buffer, sizeof(buffer), 0,
-                     (struct sockaddr *)&client_addr, &client_addr_len) < 0) {
-            /*recvfromが失敗したとき*/
-            if (errno == EWOULDBLOCK) {
-                /*タイムアウト時のみ継続*/
-                printf("recvfrom() timeout retry %d\n", i);
-                i++; /*タイムアウトカウント*/
-                if (i == RETRY_MAX) {
-                    nm.peer = DEAD;
+        int ret = select(NFDS, &sock_set, NULL, NULL, &timeout);
+        if (ret == 0) {
+            /*タイムアウト*/
+            /*FIXME:どうしてもselectがタイム・アウトする*/
+            printf("recvfrom() timeout retry %d\n", i);
+            printf("errorno :%d\n", errno);
+            i++; /*タイムアウトカウント*/
+            if (i == RETRY_MAX) {
+                nm.peer = DEAD;
+            }
+            if (nm.peer == DEAD) {
+                printf("Peer server is dead\n");
+                break;
+            }
+            continue;
+        } else if (ret < 0) {
+            /*タイムアウト以外の異常は終了*/
+            perror("recvfrom() failed");
+            exit(EXIT_FAILURE);
+        } else {
+            if (FD_ISSET(sock, &sock_set)) {
+                client_addr_len = sizeof(client_addr);
+                if (recvfrom(sock, &buffer, sizeof(buffer), 0,
+                             (struct sockaddr *)&client_addr,
+                             &client_addr_len) < 0) {
+                    perror("recvfrom() failed");
                 }
-                if (nm.peer == DEAD) {
-                    printf("Peer server is dead\n");
-                    break;
-                }
-                continue;
+
+                timestamp = ((timestamp < buffer) ? buffer : timestamp) +
+                            1; /*受信イベント*/
+                printf("[%d]\tClient recv\n", timestamp);
             } else {
-                /*それ以外は終了*/
-                perror("recvfrom() failed");
-                exit(EXIT_FAILURE);
+                perror("FD_ISSET() failed");
             }
         }
-        /*TODO:タイムアウト処理を入れる*/
-        // printf("Hndling client : %s\n", inet_ntoa(client_addr.sin_addr));
         timestamp = ((timestamp < buffer) ? buffer : timestamp) + 1;
         printf("[%d]\tServer recv\n", timestamp);
         /*****************************************************************************/
@@ -96,8 +114,9 @@ int main() {
                    (struct sockaddr *)&client_addr, client_addr_len) < 0) {
             perror("sendto() failed");
         }
-        /*****************************************************************************/
         printf("[%d]\tServer send\n", timestamp);
+        /*****************************************************************************/
+        sleep(INTERVAL);
     }
 
     return 0;
