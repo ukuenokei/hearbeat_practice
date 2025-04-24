@@ -16,7 +16,6 @@
 #define TIMEOUT_USEC 0
 #define INTERVAL 3
 #define RETRY_MAX 3
-#define NFDS 1
 
 #define ALIVE 0
 #define DEAD 1

@@ -66,8 +66,6 @@ int main() {
         /*********************************受信イベント*********************************/
         client_addr_len = sizeof(client_addr);
         if (ret == 0) {
-            /*タイムアウト*/
-            /*FIXME:どうしてもselectがタイムアウトする*/
             printf("recvfrom() timeout retry %d\n", i);
             i++; /*タイムアウトカウント*/
             if (i == RETRY_MAX) {
