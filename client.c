@@ -32,9 +32,9 @@ int main() {
     int serv_addr_len;
     unsigned int timestamp; /*自分の時刻*/
     unsigned int buffer;    /*相手から受け取った時刻*/
-    struct timeval timeout;
+
     struct nodemap nm;
-    fd_set sock_set;
+
     timestamp = 0;
     nm.self = ALIVE;
     nm.peer = ALIVE;
@@ -54,21 +54,17 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    // if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout))
-    // <
-    //     0) {
-    //     perror("setsockopt(RCVTIMEO) failed");
-    //     exit(EXIT_FAILURE);
-    // }
-
     int i = 0;
     while (1) {
+        struct timeval timeout;
+        fd_set sock_set;
         FD_ZERO(&sock_set);
         FD_SET(sock, &sock_set);
         timeout.tv_sec = TIMEOUT_SEC;
         timeout.tv_usec = TIMEOUT_USEC;
         /*********************************送信イベント*********************************/
         timestamp++; /*送信イベント*/
+        int ret = select(sock + 1, &sock_set, NULL, NULL, &timeout);
         printf("[%d]\tClient send\n", timestamp);
         if (sendto(sock, &timestamp, sizeof(timestamp), 0,
                    (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
@@ -76,7 +72,6 @@ int main() {
         }
         /*****************************************************************************/
         /*********************************受信イベント*********************************/
-        int ret = select(NFDS, &sock_set, NULL, NULL, &timeout);
         if (ret == 0) {
             /*タイムアウト*/
             printf("recvfrom() timeout retry %d\n", i);
@@ -97,8 +92,7 @@ int main() {
             if (FD_ISSET(sock, &sock_set)) {
                 serv_addr_len = sizeof(serv_addr);
                 if (recvfrom(sock, &buffer, sizeof(buffer), 0,
-                             (struct sockaddr *)&serv_addr,
-                             &serv_addr_len) < 0) {
+                             (struct sockaddr *)&serv_addr, &serv_addr_len) < 0) {
                     perror("recvfrom() failed");
                 }
                 timestamp = ((timestamp < buffer) ? buffer : timestamp) +
@@ -108,33 +102,6 @@ int main() {
                 perror("FD_ISSET() failed");
             }
         }
-        // serv_addr_len = sizeof(serv_addr);
-        // if (recvfrom(sock, &buffer, sizeof(buffer), 0,
-        //              (struct sockaddr *)&serv_addr, &serv_addr_len) < 0) {
-        //     /*recvfromが失敗したとき*/
-        //     if (errno == EWOULDBLOCK) {
-        //         /*タイムアウト時のみ継続*/
-        //         printf("recvfrom() timeout retry %d\n", i);
-        //         i++; /*タイムアウトカウント*/
-        //         if (i == RETRY_MAX) {
-        //             nm.peer = DEAD;
-        //         }
-        //         if (nm.peer == DEAD) {
-        //             printf("Peer server is dead\n");
-        //             break;
-        //         }
-        //         continue;
-        //     } else {
-        //         /*それ以外は終了*/
-        //         perror("recvfrom() failed");
-        //         exit(EXIT_FAILURE);
-        //     }
-        //}
-        // if (strcmp(buffer, message) != 0) {
-        //     /*期待したメッセージを受信しなかった場合*/
-        //     printf("Message Error : %s\n", buffer);
-        //     break;
-        // }
 
         /*****************************************************************************/
         sleep(INTERVAL);

@@ -28,11 +28,9 @@ int main() {
     int sock;
     struct sockaddr_in serv_addr;
     struct sockaddr_in client_addr;
-    fd_set sock_set;
     int client_addr_len;
     unsigned int timestamp; /*自分の時刻*/
     unsigned int buffer;    /*相手から受け取った時刻*/
-    struct timeval timeout;
     struct nodemap nm;
 
     timestamp = 0;
@@ -50,12 +48,6 @@ int main() {
         perror("socket() failed");
         exit(EXIT_FAILURE);
     }
-    // if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout))
-    // <
-    //     0) {
-    //     perror("setsockopt(RCVTIMEO) failed");
-    //     exit(EXIT_FAILURE);
-    // }
 
     if (bind(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) {
         perror("bind() failed");
@@ -64,18 +56,19 @@ int main() {
 
     int i = 0;
     while (1) {
+        fd_set sock_set;
+        struct timeval timeout;
         FD_ZERO(&sock_set);
         FD_SET(sock, &sock_set);
         timeout.tv_sec = TIMEOUT_SEC;
         timeout.tv_usec = TIMEOUT_USEC;
+        int ret = select(sock + 1, &sock_set, NULL, NULL, &timeout);
         /*********************************受信イベント*********************************/
         client_addr_len = sizeof(client_addr);
-        int ret = select(NFDS, &sock_set, NULL, NULL, &timeout);
         if (ret == 0) {
             /*タイムアウト*/
-            /*FIXME:どうしてもselectがタイム・アウトする*/
+            /*FIXME:どうしてもselectがタイムアウトする*/
             printf("recvfrom() timeout retry %d\n", i);
-            printf("errorno :%d\n", errno);
             i++; /*タイムアウトカウント*/
             if (i == RETRY_MAX) {
                 nm.peer = DEAD;
@@ -93,8 +86,7 @@ int main() {
             if (FD_ISSET(sock, &sock_set)) {
                 client_addr_len = sizeof(client_addr);
                 if (recvfrom(sock, &buffer, sizeof(buffer), 0,
-                             (struct sockaddr *)&client_addr,
-                             &client_addr_len) < 0) {
+                             (struct sockaddr *)&client_addr, &client_addr_len) < 0) {
                     perror("recvfrom() failed");
                 }
 
