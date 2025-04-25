@@ -14,6 +14,7 @@
 #define TIMEOUT_USEC 0
 #define INTERVAL 3
 #define RETRY_MAX 3
+#define MAX_NODENUM 2
 
 #define ALIVE 0
 #define DEAD 1
@@ -22,19 +23,35 @@ struct nodemap {
     int peer;
 };
 
-int main() {
+struct nodemap nm;
+
+void print_event(char *str, unsigned int *vc, int node_num) {
+    int i;
+    for (i = 0; i < node_num; i++) {
+        printf("[%d]\t", vc[i]);
+    }
+    printf("%d\t%d\t", nm.self, nm.peer);
+    printf("%s\n", str);
+}
+int main(int argc, char **argv) {
     int sock;
     struct sockaddr_in serv_addr;
     struct sockaddr_in client_addr;
     int client_addr_len;
-    unsigned int timestamp; /*自分の時刻*/
-    unsigned int buffer;    /*相手から受け取った時刻*/
     struct timeval timeout;
-    struct nodemap nm;
+    unsigned int vc[MAX_NODENUM];
+    unsigned int buffer[MAX_NODENUM]; /*送受信用バッファ*/
+    int node_num = MAX_NODENUM;       /*FIXME:今は仮で2ノードのみ取り扱う*/
+    int self_nodenum;
+    int retry_count = 0;
 
+    if (argc != 2) {
+        printf("Usage: %s node number\n", argv[0]);
+        exit(EXIT_SUCCESS);
+    }
+    self_nodenum = atoi(argv[1]);
     timeout.tv_sec = TIMEOUT_SEC;
     timeout.tv_usec = TIMEOUT_USEC;
-    timestamp = 0;
 
     if (&serv_addr == NULL) {
         perror("serv_addr is NULL");
@@ -44,6 +61,8 @@ int main() {
     serv_addr.sin_family = PF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port = htons(PORT);
+
+    memset(&vc, 0, sizeof(vc));
 
     if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
         perror("socket() failed");
@@ -59,44 +78,52 @@ int main() {
         perror("bind() failed");
         exit(EXIT_FAILURE);
     }
-
-    int i = 0;
+    print_event("Program start", vc, node_num);
     while (1) {
         /*********************************受信イベント*********************************/
         client_addr_len = sizeof(client_addr);
         if (recvfrom(sock, &buffer, sizeof(buffer), 0,
-                (struct sockaddr *)&client_addr, &client_addr_len) < 0) {
-            /*recvfromが失敗したとき*/
+                     (struct sockaddr *)&client_addr, &client_addr_len) < 0) {
             if (errno == EWOULDBLOCK) {
                 /*タイムアウト時のみ継続*/
-                printf("recvfrom() timeout retry %d\n", i);
-                i++; /*タイムアウトカウント*/
-                if (i == RETRY_MAX) {
+                printf("recvfrom() timeout retry %d\n", retry_count);
+                retry_count++; /*タイムアウトカウント*/
+                if (retry_count == RETRY_MAX) {
                     nm.peer = DEAD;
                 }
                 if (nm.peer == DEAD) {
                     printf("Peer server is dead\n");
-                    break;
+                    // break;
                 }
-                continue;
+                // continue;
             } else {
                 /*それ以外は終了*/
                 perror("recvfrom() failed");
                 exit(EXIT_FAILURE);
             }
+        } else {
+            retry_count = 0;
+            nm.peer = ALIVE;
+            vc[self_nodenum]++; /*メッセージ受信イベントで自身のクロックを増加*/
+            /*自身のベクトルクロックの値と受信したペアのベクトルの値（各要素について）の
+            最大値をとってベクトル内の各要素を更新*/
+            for (int j = 0; j < node_num; j++) {
+                vc[j] = (vc[j] < buffer[j]) ? buffer[j] : vc[j];
+            }
+            print_event("Server recv", vc, node_num);
         }
-        // printf("Hndling client : %s\n", inet_ntoa(client_addr.sin_addr));
-        timestamp = ((timestamp < buffer) ? buffer : timestamp) + 1;
-        printf("[%d]\tServer recv\n", timestamp);
         /*****************************************************************************/
+        sleep(INTERVAL);
         /*********************************送信イベント*********************************/
-        timestamp++; /*送信イベント*/
-        if (sendto(sock, &timestamp, sizeof(timestamp), 0,
-                (struct sockaddr *)&client_addr, client_addr_len) < 0) {
+        vc[self_nodenum]++; /*送信を一つのイベントとする*/
+        memcpy(buffer, vc, sizeof(vc));
+        if (sendto(sock, &buffer, sizeof(buffer), 0,
+                   (struct sockaddr *)&client_addr, client_addr_len) < 0) {
             perror("sendto() failed");
+            exit(EXIT_FAILURE);
         }
+        print_event("Server send", vc, node_num);
         /*****************************************************************************/
-        printf("[%d]\tServer send\n", timestamp);
     }
 
     return 0;
