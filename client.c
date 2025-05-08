@@ -13,7 +13,7 @@
 #define BUFSIZE 16
 #define TIMEOUT_SEC 5
 #define TIMEOUT_USEC 0
-#define INTERVAL 3
+#define INTERVAL 1
 #define RETRY_MAX 3
 #define MAX_NODENUM 2
 
@@ -38,25 +38,25 @@ struct nodemap nm;
 //     return EXIT_SUCCESS;
 // }
 
-int recv_timestamp(unsigned int *buffer, int sock, struct sockaddr_in peer_addr, int to_count) {
-    int ret_val = EXIT_SUCCESS;
-    int i = 0;
-    int serv_addr_len = sizeof(peer_addr);
-    if (recvfrom(sock, buffer, sizeof(*buffer), 0,
-                 (struct sockaddr *)&peer_addr, &serv_addr_len) < 0) {
-        if (errno == EWOULDBLOCK) {
-            i++; /*タイムアウトカウント増加*/
-            printf("recvfrom() timeout retry %d\n", i);
-        } else {
-            perror("recvfrom() failed");
-            return RETURN_FAILURE;
-        }
-        if (nm.peer == DEAD) {
-            printf("Peer server is dead\n");
-            return RETURN_FAILURE;
-        }
-    }
-}
+// int recv_timestamp(unsigned int *buffer, int sock, struct sockaddr_in peer_addr, int to_count) {
+//     int ret_val = EXIT_SUCCESS;
+//     int i = 0;
+//     int serv_addr_len = sizeof(peer_addr);
+//     if (recvfrom(sock, buffer, sizeof(*buffer), 0,
+//                  (struct sockaddr *)&peer_addr, &serv_addr_len) < 0) {
+//         if (errno == EWOULDBLOCK) {
+//             i++; /*タイムアウトカウント増加*/
+//             printf("recvfrom() timeout retry %d\n", i);
+//         } else {
+//             perror("recvfrom() failed");
+//             return RETURN_FAILURE;
+//         }
+//         if (nm.peer == DEAD) {
+//             printf("Peer server is dead\n");
+//             return RETURN_FAILURE;
+//         }
+//     }
+// }
 
 void print_event(char *str, unsigned int *vc, int node_num) {
     int i;

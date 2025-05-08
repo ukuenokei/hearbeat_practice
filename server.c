@@ -12,7 +12,7 @@
 #define BUFSIZE 16
 #define TIMEOUT_SEC 5
 #define TIMEOUT_USEC 0
-#define INTERVAL 3
+#define INTERVAL 1
 #define RETRY_MAX 3
 #define MAX_NODENUM 2
 
@@ -33,6 +33,7 @@ void print_event(char *str, unsigned int *vc, int node_num) {
     printf("%d\t%d\t", nm.self, nm.peer);
     printf("%s\n", str);
 }
+
 int main(int argc, char **argv) {
     int sock;
     struct sockaddr_in serv_addr;

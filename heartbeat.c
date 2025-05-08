@@ -25,6 +25,7 @@ struct nodemap {
 };
 
 struct nodemap nm;
+unsigned int vc[MAX_NODENUM];
 
 void print_event(char *str, unsigned int *vc, int node_num) {
     int i;
@@ -41,7 +42,7 @@ int main(int argc, char **argv) {
     struct sockaddr_in client_addr;
     int client_addr_len;
     struct timeval timeout;
-    unsigned int vc[MAX_NODENUM];
+
     unsigned int buffer[MAX_NODENUM]; /*送受信用バッファ*/
     int node_num = MAX_NODENUM;       /*FIXME:今は仮で2ノードのみ取り扱う*/
     int self_nodenum;
@@ -71,7 +72,7 @@ int main(int argc, char **argv) {
     serv_addr.sin_family = PF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(self_port);
-    memset(&serv_addr, 0, sizeof(serv_addr));
+    memset(&client_addr, 0, sizeof(serv_addr));
     client_addr.sin_family = PF_INET;
     client_addr.sin_addr.s_addr = inet_addr(PEER_IP);
     client_addr.sin_port = htons(peer_port);
@@ -97,9 +98,6 @@ int main(int argc, char **argv) {
         /*********************************送信イベント*********************************/
         vc[self_nodenum]++; /*送信を一つのイベントとする*/
         memcpy(buffer, vc, sizeof(vc));
-        char ip_str[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str));
-        printf("%d %d %d %s %d\n", sock, buffer[0], buffer[1], ip_str, ntohs(client_addr.sin_port));
 
         if (sendto(sock, &buffer, sizeof(buffer), 0,
                    (struct sockaddr *)&client_addr, client_addr_len) < 0) {
